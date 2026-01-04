@@ -221,7 +221,7 @@ func (p *PrometheusLogger) recordPolicyMetrics(entry *LogEntry) {
 
 	p.policyOpsTotal.WithLabelValues(operation, success).Inc()
 	p.policyOpsDuration.WithLabelValues(operation).Observe(entry.Duration.Seconds())
-	
+
 	if entry.RuleCount > 0 {
 		p.policyRulesCount.WithLabelValues(operation).Set(float64(entry.RuleCount))
 	}
