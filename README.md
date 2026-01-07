@@ -7,26 +7,35 @@
 [![Release](https://img.shields.io/github/release/casbin/casbin-prometheus-logger.svg)](https://github.com/casbin/casbin-prometheus-logger/releases/latest)
 [![Discord](https://img.shields.io/discord/1022748306096537660?logo=discord&label=discord&color=5865F2)](https://discord.gg/S5UjpzGZjN)
 
-A Prometheus logger implementation for [Casbin](https://github.com/casbin/casbin), providing event-driven metrics collection for authorization events.
+Prometheus metrics for [Casbin](https://github.com/casbin/casbin) authorization enforcement. Track which policies are being enforced, how often access is granted or denied, and how long enforcement takes.
+
+## Why?
+
+When running Casbin in production, you want visibility into:
+- Authorization patterns (who's accessing what, and are they allowed?)
+- Performance (is policy enforcement slowing down your app?)
+- Policy changes (how many rules are being added/removed?)
+
+This logger plugs into Casbin and exports all that data as Prometheus metrics.
 
 ## Features
 
-- **Event-Driven Logging**: Implements the Casbin Logger interface with support for event-driven logging
-- **Prometheus Metrics**: Exports comprehensive metrics for Casbin operations
-- **Customizable Event Types**: Filter which event types to log
-- **Custom Callbacks**: Add custom processing for log entries
-- **Multiple Registries**: Support for both default and custom Prometheus registries
+- Track enforcement requests (allowed/denied, by domain)
+- Monitor policy operations (add, remove, load, save)
+- Filter specific event types
+- Add custom callbacks for log entries
+- Works with custom Prometheus registries
 
-## Metrics Exported
+## Metrics
 
-### Enforce Metrics
-- `casbin_enforce_total` - Total number of enforce requests (labeled by `allowed`, `domain`)
-- `casbin_enforce_duration_seconds` - Duration of enforce requests (labeled by `allowed`, `domain`)
+**Enforcement:**
+- `casbin_enforce_total` - Count of requests, labeled by `allowed` (true/false) and `domain`
+- `casbin_enforce_duration_seconds` - Request duration histogram
 
-### Policy Operation Metrics
-- `casbin_policy_operations_total` - Total number of policy operations (labeled by `operation`, `success`)
-- `casbin_policy_operations_duration_seconds` - Duration of policy operations (labeled by `operation`)
-- `casbin_policy_rules_count` - Number of policy rules affected by operations (labeled by `operation`)
+**Policy Operations:**
+- `casbin_policy_operations_total` - Count of operations (add/remove/load/save), labeled by `operation` and `success`
+- `casbin_policy_operations_duration_seconds` - Operation duration histogram
+- `casbin_policy_rules_count` - Number of rules affected per operation
 
 ## Installation
 
@@ -36,7 +45,7 @@ go get github.com/casbin/casbin-prometheus-logger
 
 ## Usage
 
-### Basic Usage
+### Basic Setup
 
 ```go
 package main
@@ -45,44 +54,55 @@ import (
     "net/http"
     
     prometheuslogger "github.com/casbin/casbin-prometheus-logger"
-    "github.com/prometheus/client_golang/prometheus"
+    "github.com/casbin/casbin/v2"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
-    // Create logger with default Prometheus registry
+    // Create logger
     logger := prometheuslogger.NewPrometheusLogger()
     defer logger.Unregister()
     
-    // Or create with custom registry
-    registry := prometheus.NewRegistry()
-    logger := prometheuslogger.NewPrometheusLoggerWithRegistry(registry)
-    defer logger.UnregisterFrom(registry)
+    // Attach to Casbin enforcer
+    enforcer, _ := casbin.NewEnforcer("model.conf", "policy.csv")
+    enforcer.SetLogger(logger)
     
-    // Use with Casbin
-    // enforcer.SetLogger(logger)
+    // Now your enforcement calls automatically generate metrics
+    enforcer.Enforce("alice", "data1", "read")
     
-    // Expose metrics endpoint
+    // Expose metrics
     http.Handle("/metrics", promhttp.Handler())
     http.ListenAndServe(":8080", nil)
 }
 ```
 
-### Configure Event Types
+### With Custom Registry
 
 ```go
-// Only log specific event types
+// Useful if you have multiple metric sources
+registry := prometheus.NewRegistry()
+logger := prometheuslogger.NewPrometheusLoggerWithRegistry(registry)
+defer logger.UnregisterFrom(registry)
+```
+
+### Filter Events
+
+Only track specific operations:
+
+```go
 logger.SetEventTypes([]prometheuslogger.EventType{
     prometheuslogger.EventEnforce,
     prometheuslogger.EventAddPolicy,
 })
 ```
 
-### Add Custom Callback
+### Custom Processing
+
+Hook into the logging pipeline:
 
 ```go
-// Add custom processing for log entries
 logger.SetLogCallback(func(entry *prometheuslogger.LogEntry) error {
+    // Your custom logic here
     fmt.Printf("Event: %s, Duration: %v\n", entry.EventType, entry.Duration)
     return nil
 })
@@ -90,26 +110,21 @@ logger.SetLogCallback(func(entry *prometheuslogger.LogEntry) error {
 
 ## Event Types
 
-The logger supports the following event types:
-
-- `EventEnforce` - Authorization enforcement requests
-- `EventAddPolicy` - Policy addition operations
-- `EventRemovePolicy` - Policy removal operations
-- `EventLoadPolicy` - Policy loading operations
-- `EventSavePolicy` - Policy saving operations
+- `EventEnforce` - Authorization checks
+- `EventAddPolicy` - Adding rules
+- `EventRemovePolicy` - Removing rules
+- `EventLoadPolicy` - Loading policy from storage
+- `EventSavePolicy` - Saving policy to storage
 
 ## Example
 
-See the [examples/basic](examples/basic/main.go) directory for a complete working example.
-
-To run the example:
+Check out [examples/basic/main.go](examples/basic/main.go) for a complete working example.
 
 ```bash
 cd examples/basic
 go run main.go
+# Visit http://localhost:8080/metrics
 ```
-
-Then visit http://localhost:8080/metrics to see the exported metrics.
 
 ## License
 
@@ -117,9 +132,9 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Found a bug or have an idea? Open an issue or send a PR. For major changes, open an issue first to discuss what you'd like to change.
 
 ## Related Projects
 
-- [Casbin](https://github.com/casbin/casbin) - An authorization library that supports access control models
-- [Prometheus](https://prometheus.io/) - Monitoring system and time series database
+- [Casbin](https://github.com/casbin/casbin) - Authorization library
+- [Prometheus](https://prometheus.io/) - Monitoring and alerting
