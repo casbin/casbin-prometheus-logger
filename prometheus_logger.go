@@ -25,87 +25,69 @@ type PrometheusLogger struct {
 	enabledEventTypes map[EventType]bool
 	callback          func(entry *LogEntry) error
 
+	// Configuration
+	enforceLabels []string // Optional labels for enforce metrics (e.g., "subject", "object", "action")
+
 	// Prometheus metrics
 	enforceDuration    *prometheus.HistogramVec
 	enforceTotal       *prometheus.CounterVec
 	policyOpsTotal     *prometheus.CounterVec
 	policyOpsDuration  *prometheus.HistogramVec
 	policyRulesCount   *prometheus.GaugeVec
+	policyStateCount   *prometheus.GaugeVec // Current count of policies by type
 }
 
 // NewPrometheusLogger creates a new PrometheusLogger with default metrics.
 func NewPrometheusLogger() *PrometheusLogger {
-	logger := &PrometheusLogger{
-		enabledEventTypes: make(map[EventType]bool),
-		enforceDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "casbin_enforce_duration_seconds",
-				Help:    "Duration of enforce requests in seconds",
-				Buckets: prometheus.DefBuckets,
-			},
-			[]string{"allowed", "domain"},
-		),
-		enforceTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "casbin_enforce_total",
-				Help: "Total number of enforce requests",
-			},
-			[]string{"allowed", "domain"},
-		),
-		policyOpsTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "casbin_policy_operations_total",
-				Help: "Total number of policy operations",
-			},
-			[]string{"operation", "success"},
-		),
-		policyOpsDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "casbin_policy_operations_duration_seconds",
-				Help:    "Duration of policy operations in seconds",
-				Buckets: prometheus.DefBuckets,
-			},
-			[]string{"operation"},
-		),
-		policyRulesCount: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "casbin_policy_rules_count",
-				Help: "Number of policy rules affected by operations",
-			},
-			[]string{"operation"},
-		),
-	}
-
-	// Register all metrics
-	prometheus.MustRegister(
-		logger.enforceDuration,
-		logger.enforceTotal,
-		logger.policyOpsTotal,
-		logger.policyOpsDuration,
-		logger.policyRulesCount,
-	)
-
-	return logger
+	return NewPrometheusLoggerWithOptions(nil, nil)
 }
 
 // NewPrometheusLoggerWithRegistry creates a new PrometheusLogger with a custom registry.
 func NewPrometheusLoggerWithRegistry(registry *prometheus.Registry) *PrometheusLogger {
+	return NewPrometheusLoggerWithOptions(registry, nil)
+}
+
+// PrometheusLoggerOptions provides configuration options for the logger.
+type PrometheusLoggerOptions struct {
+	// EnforceLabels specifies optional labels for enforce metrics.
+	// Valid values: "subject", "object", "action"
+	// By default, only "allowed" and "domain" labels are used.
+	EnforceLabels []string
+}
+
+// NewPrometheusLoggerWithOptions creates a new PrometheusLogger with custom options.
+// If registry is nil, the default Prometheus registry is used.
+// If options is nil, default options are used.
+func NewPrometheusLoggerWithOptions(registry *prometheus.Registry, options *PrometheusLoggerOptions) *PrometheusLogger {
+	if options == nil {
+		options = &PrometheusLoggerOptions{}
+	}
+
+	// Build enforce label list: always include "allowed" and "domain"
+	enforceLabels := []string{"allowed", "domain"}
+	for _, label := range options.EnforceLabels {
+		if label == "subject" || label == "object" || label == "action" {
+			enforceLabels = append(enforceLabels, label)
+		}
+	}
+
 	logger := &PrometheusLogger{
 		enabledEventTypes: make(map[EventType]bool),
+		enforceLabels:     enforceLabels,
 		enforceDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "casbin_enforce_duration_seconds",
 				Help:    "Duration of enforce requests in seconds",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"allowed", "domain"},
+			enforceLabels,
 		),
 		enforceTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "casbin_enforce_total",
 				Help: "Total number of enforce requests",
 			},
-			[]string{"allowed", "domain"},
+			enforceLabels,
 		),
 		policyOpsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -129,16 +111,35 @@ func NewPrometheusLoggerWithRegistry(registry *prometheus.Registry) *PrometheusL
 			},
 			[]string{"operation"},
 		),
+		policyStateCount: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "casbin_policy_state_count",
+				Help: "Current number of policy rules by type",
+			},
+			[]string{"ptype"},
+		),
 	}
 
-	// Register all metrics with the provided registry
-	registry.MustRegister(
-		logger.enforceDuration,
-		logger.enforceTotal,
-		logger.policyOpsTotal,
-		logger.policyOpsDuration,
-		logger.policyRulesCount,
-	)
+	// Register all metrics with the provided registry or default
+	if registry != nil {
+		registry.MustRegister(
+			logger.enforceDuration,
+			logger.enforceTotal,
+			logger.policyOpsTotal,
+			logger.policyOpsDuration,
+			logger.policyRulesCount,
+			logger.policyStateCount,
+		)
+	} else {
+		prometheus.MustRegister(
+			logger.enforceDuration,
+			logger.enforceTotal,
+			logger.policyOpsTotal,
+			logger.policyOpsDuration,
+			logger.policyRulesCount,
+			logger.policyStateCount,
+		)
+	}
 
 	return logger
 }
@@ -207,8 +208,25 @@ func (p *PrometheusLogger) recordEnforceMetrics(entry *LogEntry) {
 		allowed = "true"
 	}
 
-	p.enforceDuration.WithLabelValues(allowed, domain).Observe(entry.Duration.Seconds())
-	p.enforceTotal.WithLabelValues(allowed, domain).Inc()
+	// Build label values based on configured labels
+	labelValues := make([]string, len(p.enforceLabels))
+	for i, label := range p.enforceLabels {
+		switch label {
+		case "allowed":
+			labelValues[i] = allowed
+		case "domain":
+			labelValues[i] = domain
+		case "subject":
+			labelValues[i] = entry.Subject
+		case "object":
+			labelValues[i] = entry.Object
+		case "action":
+			labelValues[i] = entry.Action
+		}
+	}
+
+	p.enforceDuration.WithLabelValues(labelValues...).Observe(entry.Duration.Seconds())
+	p.enforceTotal.WithLabelValues(labelValues...).Inc()
 }
 
 // recordPolicyMetrics records metrics for policy operation events.
@@ -227,6 +245,13 @@ func (p *PrometheusLogger) recordPolicyMetrics(entry *LogEntry) {
 	}
 }
 
+// UpdatePolicyState updates the current policy state count for a given policy type.
+// ptype should be one of: "p", "g", "g1", "g2", "g3", etc.
+// count is the current number of policies of that type.
+func (p *PrometheusLogger) UpdatePolicyState(ptype string, count int) {
+	p.policyStateCount.WithLabelValues(ptype).Set(float64(count))
+}
+
 // Unregister unregisters all metrics from the default Prometheus registry.
 // This is useful for testing or when you need to recreate the logger.
 func (p *PrometheusLogger) Unregister() {
@@ -235,6 +260,7 @@ func (p *PrometheusLogger) Unregister() {
 	prometheus.Unregister(p.policyOpsTotal)
 	prometheus.Unregister(p.policyOpsDuration)
 	prometheus.Unregister(p.policyRulesCount)
+	prometheus.Unregister(p.policyStateCount)
 }
 
 // UnregisterFrom unregisters all metrics from a specific Prometheus registry.
@@ -245,6 +271,7 @@ func (p *PrometheusLogger) UnregisterFrom(registry *prometheus.Registry) bool {
 	result = registry.Unregister(p.policyOpsTotal) && result
 	result = registry.Unregister(p.policyOpsDuration) && result
 	result = registry.Unregister(p.policyRulesCount) && result
+	result = registry.Unregister(p.policyStateCount) && result
 	return result
 }
 
@@ -271,4 +298,9 @@ func (p *PrometheusLogger) GetPolicyOpsDuration() *prometheus.HistogramVec {
 // GetPolicyRulesCount returns the policy rules count gauge metric.
 func (p *PrometheusLogger) GetPolicyRulesCount() *prometheus.GaugeVec {
 	return p.policyRulesCount
+}
+
+// GetPolicyStateCount returns the policy state count gauge metric.
+func (p *PrometheusLogger) GetPolicyStateCount() *prometheus.GaugeVec {
+	return p.policyStateCount
 }
