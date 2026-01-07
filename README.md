@@ -64,7 +64,10 @@ func main() {
     defer logger.Unregister()
     
     // Attach to Casbin enforcer
-    enforcer, _ := casbin.NewEnforcer("model.conf", "policy.csv")
+    enforcer, err := casbin.NewEnforcer("model.conf", "policy.csv")
+    if err != nil {
+        panic(err)
+    }
     enforcer.SetLogger(logger)
     
     // Now your enforcement calls automatically generate metrics
@@ -79,7 +82,7 @@ func main() {
 ### With Custom Registry
 
 ```go
-// Useful if you have multiple metric sources
+// Useful when you need separate metrics per service or integrate with existing monitoring
 registry := prometheus.NewRegistry()
 logger := prometheuslogger.NewPrometheusLoggerWithRegistry(registry)
 defer logger.UnregisterFrom(registry)
