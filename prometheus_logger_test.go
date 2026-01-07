@@ -517,7 +517,7 @@ func TestNewPrometheusLoggerWithOptions_DefaultLabels(t *testing.T) {
 func TestNewPrometheusLoggerWithOptions_CustomLabels(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	options := &PrometheusLoggerOptions{
-		EnforceLabels: []string{"subject", "object", "action"},
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
 	}
 	logger := NewPrometheusLoggerWithOptions(registry, options)
 	defer logger.UnregisterFrom(registry)
@@ -549,7 +549,7 @@ func TestNewPrometheusLoggerWithOptions_CustomLabels(t *testing.T) {
 func TestNewPrometheusLoggerWithOptions_InvalidLabels(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	options := &PrometheusLoggerOptions{
-		EnforceLabels: []string{"subject", "invalid_label", "object"},
+		EnforceLabels: []string{EnforceLabelSubject, "invalid_label", EnforceLabelObject},
 	}
 	logger := NewPrometheusLoggerWithOptions(registry, options)
 	defer logger.UnregisterFrom(registry)
@@ -564,7 +564,7 @@ func TestNewPrometheusLoggerWithOptions_InvalidLabels(t *testing.T) {
 func TestEnforceMetrics_WithCustomLabels(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	options := &PrometheusLoggerOptions{
-		EnforceLabels: []string{"subject", "object", "action"},
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
 	}
 	logger := NewPrometheusLoggerWithOptions(registry, options)
 	defer logger.UnregisterFrom(registry)
@@ -652,7 +652,7 @@ func TestPolicyStateCount_MultipleTypes(t *testing.T) {
 func TestEnforceMetrics_EmptyOptionalFields(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	options := &PrometheusLoggerOptions{
-		EnforceLabels: []string{"subject", "object", "action"},
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
 	}
 	logger := NewPrometheusLoggerWithOptions(registry, options)
 	defer logger.UnregisterFrom(registry)

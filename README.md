@@ -76,7 +76,11 @@ func main() {
 ```go
 // Create logger with additional labels for enforce metrics
 options := &prometheuslogger.PrometheusLoggerOptions{
-    EnforceLabels: []string{"subject", "object", "action"},
+    EnforceLabels: []string{
+        prometheuslogger.EnforceLabelSubject,
+        prometheuslogger.EnforceLabelObject,
+        prometheuslogger.EnforceLabelAction,
+    },
 }
 
 registry := prometheus.NewRegistry()

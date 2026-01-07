@@ -20,6 +20,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// Valid optional enforce label names
+const (
+	EnforceLabelSubject = "subject"
+	EnforceLabelObject  = "object"
+	EnforceLabelAction  = "action"
+)
+
 // PrometheusLogger is a logger that exports metrics to Prometheus.
 type PrometheusLogger struct {
 	enabledEventTypes map[EventType]bool
@@ -50,7 +57,7 @@ func NewPrometheusLoggerWithRegistry(registry *prometheus.Registry) *PrometheusL
 // PrometheusLoggerOptions provides configuration options for the logger.
 type PrometheusLoggerOptions struct {
 	// EnforceLabels specifies optional labels for enforce metrics.
-	// Valid values: "subject", "object", "action"
+	// Valid values: EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction
 	// By default, only "allowed" and "domain" labels are used.
 	EnforceLabels []string
 }
@@ -65,8 +72,14 @@ func NewPrometheusLoggerWithOptions(registry *prometheus.Registry, options *Prom
 
 	// Build enforce label list: always include "allowed" and "domain"
 	enforceLabels := []string{"allowed", "domain"}
+	validLabels := map[string]bool{
+		EnforceLabelSubject: true,
+		EnforceLabelObject:  true,
+		EnforceLabelAction:  true,
+	}
+
 	for _, label := range options.EnforceLabels {
-		if label == "subject" || label == "object" || label == "action" {
+		if validLabels[label] {
 			enforceLabels = append(enforceLabels, label)
 		}
 	}
@@ -216,12 +229,16 @@ func (p *PrometheusLogger) recordEnforceMetrics(entry *LogEntry) {
 			labelValues[i] = allowed
 		case "domain":
 			labelValues[i] = domain
-		case "subject":
+		case EnforceLabelSubject:
 			labelValues[i] = entry.Subject
-		case "object":
+		case EnforceLabelObject:
 			labelValues[i] = entry.Object
-		case "action":
+		case EnforceLabelAction:
 			labelValues[i] = entry.Action
+		default:
+			// This should not happen due to validation in NewPrometheusLoggerWithOptions,
+			// but provide a safe default value if it does
+			labelValues[i] = ""
 		}
 	}
 
