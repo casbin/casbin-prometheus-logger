@@ -7,15 +7,13 @@
 [![Release](https://img.shields.io/github/release/casbin/casbin-prometheus-logger.svg)](https://github.com/casbin/casbin-prometheus-logger/releases/latest)
 [![Discord](https://img.shields.io/discord/1022748306096537660?logo=discord&label=discord&color=5865F2)](https://discord.gg/S5UjpzGZjN)
 
-A Prometheus logger implementation for [Casbin](https://github.com/casbin/casbin), providing event-driven metrics collection for authorization events.
+Monitor your [Casbin](https://github.com/casbin/casbin) authorization layer with Prometheus metrics. Track which users are getting denied access, how long authorization checks take, and how your policies change over time.
 
 ## Features
 
-- **Event-Driven Logging**: Implements the Casbin Logger interface with support for event-driven logging
-- **Prometheus Metrics**: Exports comprehensive metrics for Casbin operations
-- **Customizable Event Types**: Filter which event types to log
-- **Custom Callbacks**: Add custom processing for log entries
-- **Multiple Registries**: Support for both default and custom Prometheus registries
+- Filter which events to track (enforce, add/remove policies, etc.)
+- Add custom callbacks for additional processing
+- Works with both default and custom Prometheus registries
 
 ## Metrics Exported
 
@@ -117,7 +115,9 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Found a bug or want to add a feature? Check out our [open issues](https://github.com/casbin/casbin-prometheus-logger/issues) or open a new one. PRs are always welcome.
+
+For significant changes, please open an issue first to discuss what you'd like to change.
 
 ## Related Projects
 
