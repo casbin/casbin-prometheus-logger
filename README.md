@@ -98,6 +98,36 @@ The logger supports the following event types:
 - `EventLoadPolicy` - Policy loading operations
 - `EventSavePolicy` - Policy saving operations
 
+## Grafana Dashboard
+
+A pre-built Grafana dashboard is available for visualizing Casbin metrics. You can import the dashboard JSON file from [grafana-dashboard.json](grafana-dashboard.json).
+
+### Dashboard Panels
+
+The dashboard includes the following panels organized into two sections:
+
+#### Enforce Metrics
+- **Total Enforce Rate** - Overall rate of enforce requests per second
+- **Enforce Rate Detail (History)** - Historical view broken down by allowed/denied status and domain
+- **Enforce Duration (Latency Distribution)** - Histogram showing p50, p90, p95, and p99 latencies
+- **Enforce Duration by Status and Domain** - Average duration broken down by status and domain
+
+#### Policy Metrics
+- **Policy Operation Rate** - Current rate of policy operations (Add/Save/Load/Remove)
+- **Policy Operations (Success/Failure)** - Pie chart showing success vs failure distribution
+- **Policy Operation Rate History** - Historical view of policy operations activity
+- **Policy Rules Affected History** - Trend of the number of policy rules affected over time
+- **Policy Operation Duration (Latency Distribution)** - Histogram showing p50, p90, and p99 latencies for policy operations
+- **Policy Operation Average Duration** - Average duration by operation type
+
+### How to Import
+
+1. Open your Grafana instance
+2. Go to **Dashboards** → **Import**
+3. Upload the `grafana-dashboard.json` file or paste its contents
+4. Select your Prometheus datasource
+5. Click **Import**
+
 ## Example
 
 See the [examples/basic](examples/basic/main.go) directory for a complete working example.
