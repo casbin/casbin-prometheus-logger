@@ -111,6 +111,15 @@ go run main.go
 
 Then visit http://localhost:8080/metrics to see the exported metrics.
 
+## Quick Prometheus + Grafana Setup
+
+1. Install Prometheus: follow the official guide at https://prometheus.io/docs/introduction/first_steps/. After starting it, add this service to `prometheus.yml` under `scrape_configs` (e.g., `http://<host>:8080/metrics`).
+2. Install Grafana: follow https://grafana.com/docs/grafana/latest/setup-grafana/ and log in via the browser on the default port.
+3. Import data in Grafana:
+   - In "Connections", add a new Data Source and choose Prometheus.
+   - Set the URL to your Prometheus endpoint (e.g., `http://localhost:9090`), then Save & Test.
+   - In "Dashboards", click "Import"  or paste a JSON. Pick the Prometheus data source you just added to finish.
+
 ## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
