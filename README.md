@@ -109,13 +109,10 @@ This section guides you through setting up Prometheus and Grafana to visualize C
 2. **Configure Prometheus** to scrape metrics from your application. Edit your `prometheus.yml` configuration file and add a new job under `scrape_configs`:
 
 ```yaml
-global:
-  scrape_interval: 15s # Scrape targets every 15 seconds
-
 scrape_configs:
-  - job_name: "casbin-app"
+  - job_name: "casbin-prometheus-logger"
     static_configs:
-      - targets: ["localhost:8080"]  # Replace with your app's host:port
+      - targets: ["localhost:8080"]
 ```
 
 Replace `localhost:8080` with the actual address where your application exposes the `/metrics` endpoint.
