@@ -180,10 +180,12 @@ Then visit http://localhost:8080/metrics to see the exported metrics.
 
 A long-running test simulates RBAC, ABAC, and ReBAC authorization patterns for testing with Prometheus and Grafana.
 
+**Note**: This test is excluded from normal CI runs to avoid timeouts. It must be run manually with the `longrunning` build tag.
+
 ### Usage
 
 ```bash
-go test -v -run TestLongRunning -timeout 0
+go test -v -tags longrunning -run TestLongRunning -timeout 0
 ```
 
 The test generates ~50-150 requests/second and exposes metrics on `http://localhost:8080/metrics`. Press Ctrl+C to stop.
