@@ -176,53 +176,23 @@ go run main.go
 
 Then visit http://localhost:8080/metrics to see the exported metrics.
 
-## Long-Running Test for Prometheus + Grafana
+## Long-Running Test
 
-A comprehensive long-running test is available to generate realistic authorization traffic for testing Prometheus and Grafana integration. This test simulates real-world scenarios based on classic access control models:
+A long-running test simulates RBAC, ABAC, and ReBAC authorization patterns for testing with Prometheus and Grafana.
 
-- **RBAC (Role-Based Access Control)** - Users with different roles (admin, developer, viewer, guest) accessing various resources
-- **ABAC (Attribute-Based Access Control)** - Access decisions based on user attributes (department, clearance level) and resource attributes (classification, owner)
-- **ReBAC (Relationship-Based Access Control)** - Access decisions based on relationships between users and resources (ownership, organization membership)
-
-### Running the Long-Running Test
-
-To start the long-running test:
+### Usage
 
 ```bash
 go test -v -run TestLongRunning -timeout 0
 ```
 
-The test will:
-- Start a Prometheus metrics endpoint on `http://localhost:8080/metrics`
-- Continuously generate authorization events at a controlled rate (~50-150 requests/second)
-- Simulate realistic allow/deny patterns based on access control rules
-- Generate policy operation events periodically
-- Run indefinitely until interrupted with Ctrl+C
+The test generates ~50-150 requests/second and exposes metrics on `http://localhost:8080/metrics`. Press Ctrl+C to stop.
 
-**Note**: The test is designed to be resource-friendly and will not consume excessive CPU or memory. It includes controlled rate limiting with random delays between requests to simulate realistic traffic patterns.
+### Integration with Prometheus/Grafana
 
-### Using with Prometheus and Grafana
-
-1. Start the long-running test in one terminal:
-   ```bash
-   go test -v -run TestLongRunning -timeout 0
-   ```
-
-2. Configure Prometheus to scrape the metrics endpoint (see [Prometheus + Grafana Setup](#prometheus--grafana-setup) above)
-
-3. Import the provided Grafana dashboard to visualize the metrics in real-time
-
-4. Observe the metrics being updated continuously, showing:
-   - Authorization request rates and patterns
-   - Allow/deny distributions across different domains
-   - Request latency distributions
-   - Policy operation metrics
-
-This test is ideal for:
-- Testing Prometheus scraping configuration
-- Validating Grafana dashboard functionality
-- Demonstrating the logger with realistic traffic
-- Performance testing of the metrics collection pipeline
+1. Start the test
+2. Configure Prometheus to scrape `localhost:8080/metrics` 
+3. Import the Grafana dashboard from `grafana-dashboard.json`
 
 ## License
 
