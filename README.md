@@ -113,8 +113,23 @@ Then visit http://localhost:8080/metrics to see the exported metrics.
 
 ## Quick Prometheus + Grafana Setup
 
-1. Install Prometheus: follow the official guide at https://prometheus.io/docs/introduction/first_steps/. After starting it, add this service to `prometheus.yml` under `scrape_configs` (e.g., `http://<host>:8080/metrics`).
+1. Install Prometheus: follow the official guide at https://prometheus.io/docs/introduction/first_steps/. 
+After starting Prometheus, configure it to scrape metrics from your application.
+
+Edit `prometheus.yml` and add a new job under `scrape_configs` for the service exposing metrics (for example, an app exposing metrics at `http://<host>:8080/metrics`):
+
+```yaml
+global:
+  scrape_interval: 15s # By default, Prometheus scrapes targets every 15 seconds.
+
+scrape_configs:
+  - job_name: "example-service"
+    static_configs:
+      - targets: ["<host>:8080"]
+```
+
 2. Install Grafana: follow https://grafana.com/docs/grafana/latest/setup-grafana/ and log in via the browser on the default port.
+
 3. Import data in Grafana:
    - In "Connections", add a new Data Source and choose Prometheus.
    - Set the URL to your Prometheus endpoint (e.g., `http://localhost:9090`), then Save & Test.
