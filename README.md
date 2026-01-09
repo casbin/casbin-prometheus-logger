@@ -9,6 +9,8 @@
 
 A Prometheus logger implementation for [Casbin](https://github.com/casbin/casbin), providing event-driven metrics collection for authorization events.
 
+![grafana](grafana.jpg)
+
 ## Features
 
 - **Event-Driven Logging**: Implements the Casbin Logger interface with support for event-driven logging
