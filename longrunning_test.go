@@ -1,3 +1,6 @@
+//go:build longrunning
+// +build longrunning
+
 // Copyright 2026 The casbin Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,8 +32,8 @@ import (
 // This test is designed to run continuously for testing Prometheus and Grafana integration.
 // It generates realistic traffic patterns based on classic RBAC, ABAC, and ReBAC scenarios.
 //
-// To run this test:
-//   go test -v -run TestLongRunning -timeout 0
+// To run this test manually:
+//   go test -v -tags longrunning -run TestLongRunning -timeout 0
 //
 // The test will:
 // - Start a Prometheus metrics endpoint on http://localhost:8080/metrics
@@ -40,10 +43,6 @@ import (
 //
 // Press Ctrl+C to stop the test.
 func TestLongRunning(t *testing.T) {
-	// Skip in normal test runs
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
-	}
 
 	// Create a custom registry for this test
 	registry := prometheus.NewRegistry()
