@@ -86,7 +86,9 @@ func main() {
 		}
 	}()
 
-	// Initialize random number generator
+	// Initialize random number generator for simulation
+	// Note: Using math/rand (not crypto/rand) is intentional for this simulation
+	// as we don't need cryptographic randomness for test data generation
 	randSource := rand.NewSource(time.Now().UnixNano())
 	rng := rand.New(randSource)
 
