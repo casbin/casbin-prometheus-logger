@@ -86,8 +86,9 @@ func main() {
 		}
 	}()
 
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
+	// Initialize random number generator
+	randSource := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(randSource)
 
 	// Run the continuous authorization simulation
 	log.Println("\n=== Starting Long-Running Authorization Simulation ===")
@@ -95,13 +96,13 @@ func main() {
 	log.Println("Press Ctrl+C to stop...")
 	log.Println()
 
-	runContinuousSimulation(ctx, logger)
+	runContinuousSimulation(ctx, logger, rng)
 
 	log.Println("Simulation stopped.")
 }
 
 // runContinuousSimulation runs an endless loop of authorization checks
-func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.PrometheusLogger) {
+func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	ticker := time.NewTicker(requestInterval)
 	defer ticker.Stop()
 
@@ -118,28 +119,28 @@ func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.Prome
 			switch iterationCount % 10 {
 			case 0, 1, 2, 3:
 				// 40% RBAC scenarios
-				simulateRBACRequest(logger)
+				simulateRBACRequest(logger, rng)
 			case 4, 5, 6:
 				// 30% ABAC scenarios
-				simulateABACRequest(logger)
+				simulateABACRequest(logger, rng)
 			case 7, 8:
 				// 20% ReBAC scenarios
-				simulateReBACRequest(logger)
+				simulateReBACRequest(logger, rng)
 			case 9:
 				// 10% mixed/complex scenarios
-				simulateComplexRequest(logger)
+				simulateComplexRequest(logger, rng)
 			}
 
 			// Occasionally simulate policy changes
-			if rand.Float64() < policyChangeChance {
-				simulatePolicyChange(logger)
+			if rng.Float64() < policyChangeChance {
+				simulatePolicyChange(logger, rng)
 			}
 		}
 	}
 }
 
 // simulateRBACRequest simulates role-based access control scenarios
-func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger) {
+func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	// Classic RBAC: user -> role -> permission
 	scenarios := []struct {
 		subject string
@@ -170,7 +171,7 @@ func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger) {
 		{"eve", "viewer", "document6", "read", "org1", false}, // Wrong domain
 	}
 
-	scenario := scenarios[rand.Intn(len(scenarios))]
+	scenario := scenarios[rng.Intn(len(scenarios))]
 
 	entry := &prometheuslogger.LogEntry{
 		EventType: prometheuslogger.EventEnforce,
@@ -182,13 +183,13 @@ func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Simulate processing time (variable)
-	time.Sleep(time.Duration(1+rand.Intn(5)) * time.Millisecond)
+	time.Sleep(time.Duration(1+rng.Intn(5)) * time.Millisecond)
 	entry.Allowed = scenario.allowed
 	logger.OnAfterEvent(entry)
 }
 
 // simulateABACRequest simulates attribute-based access control scenarios
-func simulateABACRequest(logger *prometheuslogger.PrometheusLogger) {
+func simulateABACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	// ABAC: decisions based on attributes (age, department, time, etc.)
 	scenarios := []struct {
 		subject    string
@@ -215,7 +216,7 @@ func simulateABACRequest(logger *prometheuslogger.PrometheusLogger) {
 		{"henry", map[string]interface{}{"location": "remote"}, "internal_tool", "use", "default", false},
 	}
 
-	scenario := scenarios[rand.Intn(len(scenarios))]
+	scenario := scenarios[rng.Intn(len(scenarios))]
 
 	entry := &prometheuslogger.LogEntry{
 		EventType: prometheuslogger.EventEnforce,
@@ -227,13 +228,13 @@ func simulateABACRequest(logger *prometheuslogger.PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// ABAC typically has slightly longer processing time due to attribute evaluation
-	time.Sleep(time.Duration(2+rand.Intn(8)) * time.Millisecond)
+	time.Sleep(time.Duration(2+rng.Intn(8)) * time.Millisecond)
 	entry.Allowed = scenario.allowed
 	logger.OnAfterEvent(entry)
 }
 
 // simulateReBACRequest simulates relationship-based access control scenarios
-func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger) {
+func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	// ReBAC: decisions based on relationships (ownership, hierarchy, groups)
 	scenarios := []struct {
 		subject      string
@@ -266,7 +267,7 @@ func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger) {
 		{"iris", "viewer", "folder1/subfolder/file", "write", "default", false},
 	}
 
-	scenario := scenarios[rand.Intn(len(scenarios))]
+	scenario := scenarios[rng.Intn(len(scenarios))]
 
 	entry := &prometheuslogger.LogEntry{
 		EventType: prometheuslogger.EventEnforce,
@@ -278,13 +279,13 @@ func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// ReBAC may involve graph traversal, so slightly longer processing
-	time.Sleep(time.Duration(3+rand.Intn(10)) * time.Millisecond)
+	time.Sleep(time.Duration(3+rng.Intn(10)) * time.Millisecond)
 	entry.Allowed = scenario.allowed
 	logger.OnAfterEvent(entry)
 }
 
 // simulateComplexRequest simulates complex authorization scenarios
-func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger) {
+func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	// Complex scenarios combining RBAC, ABAC, and ReBAC
 	scenarios := []struct {
 		subject string
@@ -311,7 +312,7 @@ func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger) {
 		{"henry_ex_contractor", "project_alpha", "read", "default", false, "Contract expired"},
 	}
 
-	scenario := scenarios[rand.Intn(len(scenarios))]
+	scenario := scenarios[rng.Intn(len(scenarios))]
 
 	entry := &prometheuslogger.LogEntry{
 		EventType: prometheuslogger.EventEnforce,
@@ -323,24 +324,24 @@ func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Complex scenarios may take longer to evaluate
-	time.Sleep(time.Duration(5+rand.Intn(15)) * time.Millisecond)
+	time.Sleep(time.Duration(5+rng.Intn(15)) * time.Millisecond)
 	entry.Allowed = scenario.allowed
 	logger.OnAfterEvent(entry)
 }
 
 // simulatePolicyChange simulates policy management operations
-func simulatePolicyChange(logger *prometheuslogger.PrometheusLogger) {
+func simulatePolicyChange(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
 	operations := []struct {
 		eventType prometheuslogger.EventType
 		ruleCount int
 	}{
-		{prometheuslogger.EventAddPolicy, rand.Intn(5) + 1},
-		{prometheuslogger.EventRemovePolicy, rand.Intn(3) + 1},
-		{prometheuslogger.EventLoadPolicy, rand.Intn(100) + 50},
-		{prometheuslogger.EventSavePolicy, rand.Intn(100) + 50},
+		{prometheuslogger.EventAddPolicy, rng.Intn(5) + 1},
+		{prometheuslogger.EventRemovePolicy, rng.Intn(3) + 1},
+		{prometheuslogger.EventLoadPolicy, rng.Intn(100) + 50},
+		{prometheuslogger.EventSavePolicy, rng.Intn(100) + 50},
 	}
 
-	op := operations[rand.Intn(len(operations))]
+	op := operations[rng.Intn(len(operations))]
 
 	entry := &prometheuslogger.LogEntry{
 		EventType: op.eventType,
@@ -349,6 +350,6 @@ func simulatePolicyChange(logger *prometheuslogger.PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Policy operations typically take longer
-	time.Sleep(time.Duration(10+rand.Intn(30)) * time.Millisecond)
+	time.Sleep(time.Duration(10+rng.Intn(30)) * time.Millisecond)
 	logger.OnAfterEvent(entry)
 }
