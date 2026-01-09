@@ -12,61 +12,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package prometheuslogger
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"testing"
 	"time"
 
-	prometheuslogger "github.com/casbin/casbin-prometheus-logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Configuration for the long-running test
 const (
-	metricsPort        = ":8080"
-	requestInterval    = 100 * time.Millisecond // Time between simulated requests
-	policyChangeChance = 0.01                   // 1% chance of policy change per iteration
+	testMetricsPort        = ":8080"
+	testRequestInterval    = 100 * time.Millisecond // Time between simulated requests
+	testPolicyChangeChance = 0.01                   // 1% chance of policy change per iteration
 )
 
-func main() {
+// TestLongRunning is a long-running test case that simulates continuous authorization requests.
+// This test generates realistic metrics for Prometheus and Grafana testing.
+//
+// To run this test continuously:
+//
+//	go test -v -run TestLongRunning -timeout 0
+//
+// Press Ctrl+C to stop the test gracefully.
+//
+// The test implements classic Casbin authorization patterns:
+//   - RBAC (40%): Role-based access control
+//   - ABAC (30%): Attribute-based access control
+//   - ReBAC (20%): Relationship-based access control
+//   - Complex (10%): Combined scenarios
+//
+// Metrics are exposed at http://localhost:8080/metrics
+func TestLongRunning(t *testing.T) {
 	// Create a custom Prometheus registry
 	registry := prometheus.NewRegistry()
 
 	// Create a new PrometheusLogger with the custom registry
-	logger := prometheuslogger.NewPrometheusLoggerWithRegistry(registry)
+	logger := NewPrometheusLoggerWithRegistry(registry)
 	defer logger.UnregisterFrom(registry)
 
 	// Set a custom callback for logging
-	err := logger.SetLogCallback(func(entry *prometheuslogger.LogEntry) error {
-		if entry.EventType == prometheuslogger.EventEnforce {
-			log.Printf("[ENFORCE] %s %s %s (domain: %s) -> allowed: %v, duration: %v",
+	err := logger.SetLogCallback(func(entry *LogEntry) error {
+		if entry.EventType == EventEnforce {
+			t.Logf("[ENFORCE] %s %s %s (domain: %s) -> allowed: %v, duration: %v",
 				entry.Subject, entry.Action, entry.Object, entry.Domain, entry.Allowed, entry.Duration)
 		} else {
-			log.Printf("[%s] rules: %d, duration: %v", entry.EventType, entry.RuleCount, entry.Duration)
+			t.Logf("[%s] rules: %d, duration: %v", entry.EventType, entry.RuleCount, entry.Duration)
 		}
 		return nil
 	})
 	if err != nil {
-		log.Fatalf("Failed to set callback: %v", err)
+		t.Fatalf("Failed to set callback: %v", err)
 	}
 
 	// Set up HTTP server for metrics
 	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
-	server := &http.Server{Addr: metricsPort}
+	server := &http.Server{Addr: testMetricsPort}
 	go func() {
-		log.Printf("Starting metrics server on %s", metricsPort)
-		log.Printf("Visit http://localhost%s/metrics to see the metrics", metricsPort)
+		t.Logf("Starting metrics server on %s", testMetricsPort)
+		t.Logf("Visit http://localhost%s/metrics to see the metrics", testMetricsPort)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start metrics server: %v", err)
+			t.Logf("Metrics server stopped: %v", err)
+		}
+	}()
+	defer func() {
+		if err := server.Shutdown(context.Background()); err != nil {
+			t.Logf("Error shutting down server: %v", err)
 		}
 	}()
 
@@ -74,16 +94,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Handle Ctrl+C
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	go func() {
 		<-sigChan
-		log.Println("\nReceived shutdown signal, gracefully shutting down...")
+		t.Log("\nReceived shutdown signal, gracefully shutting down...")
 		cancel()
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down server: %v", err)
-		}
 	}()
 
 	// Initialize random number generator for simulation
@@ -93,19 +112,19 @@ func main() {
 	rng := rand.New(randSource)
 
 	// Run the continuous authorization simulation
-	log.Println("\n=== Starting Long-Running Authorization Simulation ===")
-	log.Println("This simulation runs continuously to generate metrics for Prometheus/Grafana")
-	log.Println("Press Ctrl+C to stop...")
-	log.Println()
+	t.Log("\n=== Starting Long-Running Authorization Simulation ===")
+	t.Log("This simulation runs continuously to generate metrics for Prometheus/Grafana")
+	t.Log("Press Ctrl+C to stop...")
+	t.Log("")
 
-	runContinuousSimulation(ctx, logger, rng)
+	runContinuousSimulation(t, ctx, logger, rng)
 
-	log.Println("Simulation stopped.")
+	t.Log("Simulation stopped.")
 }
 
 // runContinuousSimulation runs an endless loop of authorization checks
-func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
-	ticker := time.NewTicker(requestInterval)
+func runContinuousSimulation(t *testing.T, ctx context.Context, logger *PrometheusLogger, rng *rand.Rand) {
+	ticker := time.NewTicker(testRequestInterval)
 	defer ticker.Stop()
 
 	iterationCount := 0
@@ -134,7 +153,7 @@ func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.Prome
 			}
 
 			// Occasionally simulate policy changes
-			if rng.Float64() < policyChangeChance {
+			if rng.Float64() < testPolicyChangeChance {
 				simulatePolicyChange(logger, rng)
 			}
 		}
@@ -142,7 +161,7 @@ func runContinuousSimulation(ctx context.Context, logger *prometheuslogger.Prome
 }
 
 // simulateRBACRequest simulates role-based access control scenarios
-func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
+func simulateRBACRequest(logger *PrometheusLogger, rng *rand.Rand) {
 	// Classic RBAC: user -> role -> permission
 	scenarios := []struct {
 		subject string
@@ -175,8 +194,8 @@ func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Ra
 
 	scenario := scenarios[rng.Intn(len(scenarios))]
 
-	entry := &prometheuslogger.LogEntry{
-		EventType: prometheuslogger.EventEnforce,
+	entry := &LogEntry{
+		EventType: EventEnforce,
 		Subject:   scenario.subject,
 		Object:    scenario.object,
 		Action:    scenario.action,
@@ -191,7 +210,7 @@ func simulateRBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Ra
 }
 
 // simulateABACRequest simulates attribute-based access control scenarios
-func simulateABACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
+func simulateABACRequest(logger *PrometheusLogger, rng *rand.Rand) {
 	// ABAC: decisions based on attributes (age, department, time, etc.)
 	scenarios := []struct {
 		subject    string
@@ -220,8 +239,8 @@ func simulateABACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Ra
 
 	scenario := scenarios[rng.Intn(len(scenarios))]
 
-	entry := &prometheuslogger.LogEntry{
-		EventType: prometheuslogger.EventEnforce,
+	entry := &LogEntry{
+		EventType: EventEnforce,
 		Subject:   scenario.subject,
 		Object:    scenario.object,
 		Action:    scenario.action,
@@ -236,7 +255,7 @@ func simulateABACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Ra
 }
 
 // simulateReBACRequest simulates relationship-based access control scenarios
-func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
+func simulateReBACRequest(logger *PrometheusLogger, rng *rand.Rand) {
 	// ReBAC: decisions based on relationships (ownership, hierarchy, groups)
 	scenarios := []struct {
 		subject      string
@@ -271,8 +290,8 @@ func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.R
 
 	scenario := scenarios[rng.Intn(len(scenarios))]
 
-	entry := &prometheuslogger.LogEntry{
-		EventType: prometheuslogger.EventEnforce,
+	entry := &LogEntry{
+		EventType: EventEnforce,
 		Subject:   scenario.subject,
 		Object:    scenario.object,
 		Action:    scenario.action,
@@ -287,7 +306,7 @@ func simulateReBACRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.R
 }
 
 // simulateComplexRequest simulates complex authorization scenarios
-func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
+func simulateComplexRequest(logger *PrometheusLogger, rng *rand.Rand) {
 	// Complex scenarios combining RBAC, ABAC, and ReBAC
 	scenarios := []struct {
 		subject string
@@ -316,8 +335,8 @@ func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger, rng *rand
 
 	scenario := scenarios[rng.Intn(len(scenarios))]
 
-	entry := &prometheuslogger.LogEntry{
-		EventType: prometheuslogger.EventEnforce,
+	entry := &LogEntry{
+		EventType: EventEnforce,
 		Subject:   scenario.subject,
 		Object:    scenario.object,
 		Action:    scenario.action,
@@ -332,20 +351,20 @@ func simulateComplexRequest(logger *prometheuslogger.PrometheusLogger, rng *rand
 }
 
 // simulatePolicyChange simulates policy management operations
-func simulatePolicyChange(logger *prometheuslogger.PrometheusLogger, rng *rand.Rand) {
+func simulatePolicyChange(logger *PrometheusLogger, rng *rand.Rand) {
 	operations := []struct {
-		eventType prometheuslogger.EventType
+		eventType EventType
 		ruleCount int
 	}{
-		{prometheuslogger.EventAddPolicy, rng.Intn(5) + 1},
-		{prometheuslogger.EventRemovePolicy, rng.Intn(3) + 1},
-		{prometheuslogger.EventLoadPolicy, rng.Intn(100) + 50},
-		{prometheuslogger.EventSavePolicy, rng.Intn(100) + 50},
+		{EventAddPolicy, rng.Intn(5) + 1},
+		{EventRemovePolicy, rng.Intn(3) + 1},
+		{EventLoadPolicy, rng.Intn(100) + 50},
+		{EventSavePolicy, rng.Intn(100) + 50},
 	}
 
 	op := operations[rng.Intn(len(operations))]
 
-	entry := &prometheuslogger.LogEntry{
+	entry := &LogEntry{
 		EventType: op.eventType,
 		RuleCount: op.ruleCount,
 	}
