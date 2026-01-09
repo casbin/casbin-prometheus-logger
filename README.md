@@ -100,6 +100,73 @@ The logger supports the following event types:
 
 ## Prometheus + Grafana Setup
 
+=======
+
+This section guides you through setting up Prometheus and Grafana to visualize Casbin metrics.
+
+### 1. Install and Configure Prometheus
+
+1. **Install Prometheus**: Follow the official guide at https://prometheus.io/docs/introduction/first_steps/
+
+2. **Configure Prometheus** to scrape metrics from your application. Edit your `prometheus.yml` configuration file and add a new job under `scrape_configs`:
+
+```yaml
+global:
+  scrape_interval: 15s # Scrape targets every 15 seconds
+
+scrape_configs:
+  - job_name: "casbin-app"
+    static_configs:
+      - targets: ["localhost:8080"]  # Replace with your app's host:port
+```
+
+Replace `localhost:8080` with the actual address where your application exposes the `/metrics` endpoint.
+
+3. **Start Prometheus** and verify it's scraping metrics by visiting `http://localhost:9090/targets` in your browser.
+
+### 2. Install Grafana
+
+Follow the official Grafana installation guide at https://grafana.com/docs/grafana/latest/setup-grafana/installation/ for your platform. After installation, access Grafana via your browser (default: `http://localhost:3000`) and log in with the default credentials (admin/admin).
+
+### 3. Configure Grafana Data Source
+
+1. In Grafana, navigate to **Connections** → **Data Sources**
+2. Click **Add data source**
+3. Select **Prometheus**
+4. Set the URL to your Prometheus endpoint (e.g., `http://localhost:9090`)
+5. Click **Save & Test** to verify the connection
+
+### 4. Import Casbin Dashboard
+
+A pre-built Grafana dashboard is available for visualizing Casbin metrics. You can import the dashboard JSON file from [grafana-dashboard.json](grafana-dashboard.json).
+
+**To import the dashboard:**
+
+1. In Grafana, go to **Dashboards** → **Import**
+2. Upload the `grafana-dashboard.json` file or paste its contents
+3. Select the Prometheus data source you configured in the previous step
+4. Click **Import**
+
+### Dashboard Panels
+
+The dashboard includes the following panels organized into two sections:
+
+#### Enforce Metrics
+- **Total Enforce Rate** - Overall rate of enforce requests per second
+- **Enforce Rate Detail (History)** - Historical view broken down by allowed/denied status and domain
+- **Enforce Duration (Latency Distribution)** - Histogram showing p50, p90, p95, and p99 latencies
+- **Enforce Duration by Status and Domain** - Average duration broken down by status and domain
+
+#### Policy Metrics
+- **Policy Operation Rate** - Current rate of policy operations (Add/Save/Load/Remove)
+- **Policy Operations (Success/Failure)** - Pie chart showing success vs failure distribution
+- **Policy Operation Rate History** - Historical view of policy operations activity
+- **Policy Rules Affected History** - Trend of the number of policy rules affected over time
+- **Policy Operation Duration (Latency Distribution)** - Histogram showing p50, p90, and p99 latencies for policy operations
+- **Policy Operation Average Duration** - Average duration by operation type
+
+## Example
+
 This section guides you through setting up Prometheus and Grafana to visualize Casbin metrics.
 
 ### 1. Install and Configure Prometheus
