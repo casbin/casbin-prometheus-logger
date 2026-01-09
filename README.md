@@ -176,6 +176,24 @@ go run main.go
 
 Then visit http://localhost:8080/metrics to see the exported metrics.
 
+## Long-Running Test
+
+A long-running test simulates RBAC, ABAC, and ReBAC authorization patterns for testing with Prometheus and Grafana.
+
+### Usage
+
+```bash
+go test -v -run TestLongRunning -timeout 0
+```
+
+The test generates ~50-150 requests/second and exposes metrics on `http://localhost:8080/metrics`. Press Ctrl+C to stop.
+
+### Integration with Prometheus/Grafana
+
+1. Start the test
+2. Configure Prometheus to scrape `localhost:8080/metrics` 
+3. Import the Grafana dashboard from `grafana-dashboard.json`
+
 ## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
