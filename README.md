@@ -98,11 +98,13 @@ The logger supports the following event types:
 - `EventLoadPolicy` - Policy loading operations
 - `EventSavePolicy` - Policy saving operations
 
-## Example
+## Examples
 
-See the [examples/basic](examples/basic/main.go) directory for a complete working example.
+### Basic Example
 
-To run the example:
+See the [examples/basic](examples/basic/main.go) directory for a complete working example demonstrating basic usage.
+
+To run the basic example:
 
 ```bash
 cd examples/basic
@@ -110,6 +112,26 @@ go run main.go
 ```
 
 Then visit http://localhost:8080/metrics to see the exported metrics.
+
+### Long-Running Test Case
+
+See the [examples/longrunning](examples/longrunning/README.md) directory for a continuous authorization simulation that generates realistic metrics for Prometheus and Grafana.
+
+This example demonstrates:
+- **RBAC** (Role-Based Access Control) scenarios
+- **ABAC** (Attribute-Based Access Control) scenarios
+- **ReBAC** (Relationship-Based Access Control) scenarios
+- Continuous operation for real-world monitoring
+- Graceful shutdown handling
+
+To run the long-running example:
+
+```bash
+cd examples/longrunning
+go run main.go
+```
+
+The simulation will run continuously until interrupted with Ctrl+C, generating metrics that can be scraped by Prometheus and visualized in Grafana.
 
 ## License
 

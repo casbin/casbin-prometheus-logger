@@ -33,5 +33,7 @@ go.work.sum
 
 # Example binaries
 examples/*/example
+examples/*/longrunning
+examples/*/basic
 examples/*/go.mod
 examples/*/go.sum
