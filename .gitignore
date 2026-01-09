@@ -35,3 +35,6 @@ go.work.sum
 examples/*/example
 examples/*/go.mod
 examples/*/go.sum
+
+.idea/
+*.iml
