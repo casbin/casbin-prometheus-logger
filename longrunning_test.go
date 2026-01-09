@@ -50,12 +50,20 @@ func TestLongRunning(t *testing.T) {
 	logger := NewPrometheusLoggerWithRegistry(registry)
 	defer logger.UnregisterFrom(registry)
 
+	// Create a new ServeMux to avoid global handler conflicts
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
 	// Start HTTP server for metrics
-	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	go func() {
 		t.Logf("Starting metrics server on :8080")
 		t.Logf("Visit http://localhost:8080/metrics to see the metrics")
-		if err := http.ListenAndServe(":8080", nil); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			t.Logf("Metrics server stopped: %v", err)
 		}
 	}()
@@ -66,15 +74,15 @@ func TestLongRunning(t *testing.T) {
 	t.Log("Starting long-running test. Press Ctrl+C to stop...")
 	t.Log("Generating realistic authorization events based on RBAC, ABAC, and ReBAC patterns")
 
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
+	// Create a local random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Run the simulation loop
-	runSimulation(t, logger)
+	runSimulation(t, logger, rng)
 }
 
 // runSimulation runs the continuous simulation of authorization events
-func runSimulation(t *testing.T, logger *PrometheusLogger) {
+func runSimulation(t *testing.T, logger *PrometheusLogger, rng *rand.Rand) {
 	// Track iterations for periodic events
 	iteration := 0
 
@@ -83,23 +91,23 @@ func runSimulation(t *testing.T, logger *PrometheusLogger) {
 		iteration++
 
 		// Perform a batch of enforce checks (10-20 per iteration)
-		batchSize := 10 + rand.Intn(11) // 10-20 requests
+		batchSize := 10 + rng.Intn(11) // 10-20 requests
 		for i := 0; i < batchSize; i++ {
 			// Randomly select a scenario type
-			scenarioType := rand.Intn(3)
+			scenarioType := rng.Intn(3)
 			switch scenarioType {
 			case 0:
-				simulateRBACEnforce(logger)
+				simulateRBACEnforce(logger, rng)
 			case 1:
-				simulateABACEnforce(logger)
+				simulateABACEnforce(logger, rng)
 			case 2:
-				simulateReBACEnforce(logger)
+				simulateReBACEnforce(logger, rng)
 			}
 		}
 
 		// Periodically simulate policy operations (every ~50 iterations)
 		if iteration%50 == 0 {
-			simulatePolicyOperation(logger)
+			simulatePolicyOperation(logger, rng)
 		}
 
 		// Log progress every 100 iterations
@@ -109,14 +117,14 @@ func runSimulation(t *testing.T, logger *PrometheusLogger) {
 
 		// Sleep to control request rate (100-300ms between batches)
 		// This results in approximately 50-150 requests per second
-		sleepTime := 100 + rand.Intn(200)
+		sleepTime := 100 + rng.Intn(200)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
 
 // simulateRBACEnforce simulates Role-Based Access Control scenarios
 // Based on classic RBAC model: users -> roles -> permissions
-func simulateRBACEnforce(logger *PrometheusLogger) {
+func simulateRBACEnforce(logger *PrometheusLogger, rng *rand.Rand) {
 	// RBAC users and their typical roles
 	users := []string{"alice", "bob", "charlie", "david", "eve"}
 	resources := []string{"project1", "project2", "database", "config", "logs"}
@@ -124,13 +132,13 @@ func simulateRBACEnforce(logger *PrometheusLogger) {
 	domains := []string{"", "domain1", "domain2"} // Empty string for default domain
 
 	// Select random parameters
-	user := users[rand.Intn(len(users))]
-	resource := resources[rand.Intn(len(resources))]
-	action := actions[rand.Intn(len(actions))]
-	domain := domains[rand.Intn(len(domains))]
+	user := users[rng.Intn(len(users))]
+	resource := resources[rng.Intn(len(resources))]
+	action := actions[rng.Intn(len(actions))]
+	domain := domains[rng.Intn(len(domains))]
 
 	// Determine if access should be allowed based on realistic RBAC rules
-	allowed := determineRBACAccess(user, resource, action)
+	allowed := determineRBACAccess(user, resource, action, rng)
 
 	// Create and log the enforce event
 	entry := &LogEntry{
@@ -143,13 +151,13 @@ func simulateRBACEnforce(logger *PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Simulate processing time (1-10ms)
-	time.Sleep(time.Duration(1+rand.Intn(10)) * time.Millisecond)
+	time.Sleep(time.Duration(1+rng.Intn(10)) * time.Millisecond)
 	entry.Allowed = allowed
 	logger.OnAfterEvent(entry)
 }
 
 // determineRBACAccess simulates RBAC policy evaluation
-func determineRBACAccess(user, resource, action string) bool {
+func determineRBACAccess(user, resource, action string, rng *rand.Rand) bool {
 	// Simulate realistic RBAC rules
 	// Alice is admin - can do anything
 	if user == "alice" {
@@ -174,7 +182,7 @@ func determineRBACAccess(user, resource, action string) bool {
 	// Eve is guest - very limited access
 	if user == "eve" {
 		// Only 30% chance of access (restricted)
-		return rand.Float32() < 0.3
+		return rng.Float32() < 0.3
 	}
 
 	return false
@@ -182,7 +190,7 @@ func determineRBACAccess(user, resource, action string) bool {
 
 // simulateABACEnforce simulates Attribute-Based Access Control scenarios
 // Based on classic ABAC model: decisions based on attributes of subject, resource, action, and environment
-func simulateABACEnforce(logger *PrometheusLogger) {
+func simulateABACEnforce(logger *PrometheusLogger, rng *rand.Rand) {
 	// ABAC subjects with attributes
 	subjects := []struct {
 		name       string
@@ -212,12 +220,12 @@ func simulateABACEnforce(logger *PrometheusLogger) {
 	actions := []string{"read", "write", "delete"}
 
 	// Select random parameters
-	subject := subjects[rand.Intn(len(subjects))]
-	resource := resources[rand.Intn(len(resources))]
-	action := actions[rand.Intn(len(actions))]
+	subject := subjects[rng.Intn(len(subjects))]
+	resource := resources[rng.Intn(len(resources))]
+	action := actions[rng.Intn(len(actions))]
 
 	// Determine if access should be allowed based on ABAC rules
-	allowed := determineABACAccess(subject.clearance, subject.department, resource.classification, resource.ownerDepartment, action)
+	allowed := determineABACAccess(subject.clearance, subject.department, resource.classification, resource.ownerDepartment, action, rng)
 
 	// Create and log the enforce event
 	entry := &LogEntry{
@@ -230,13 +238,13 @@ func simulateABACEnforce(logger *PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Simulate processing time (2-15ms for ABAC complexity)
-	time.Sleep(time.Duration(2+rand.Intn(14)) * time.Millisecond)
+	time.Sleep(time.Duration(2+rng.Intn(14)) * time.Millisecond)
 	entry.Allowed = allowed
 	logger.OnAfterEvent(entry)
 }
 
 // determineABACAccess simulates ABAC policy evaluation based on attributes
-func determineABACAccess(clearance int, department string, classification int, ownerDept string, action string) bool {
+func determineABACAccess(clearance int, department string, classification int, ownerDept string, action string, rng *rand.Rand) bool {
 	// Rule 1: Clearance level must be >= resource classification
 	if clearance < classification {
 		return false
@@ -249,7 +257,7 @@ func determineABACAccess(clearance int, department string, classification int, o
 
 	// Rule 3: Guest department has very limited access
 	if department == "guest" {
-		return rand.Float32() < 0.2
+		return rng.Float32() < 0.2
 	}
 
 	// Rule 4: HR can access HR records regardless
@@ -262,7 +270,7 @@ func determineABACAccess(clearance int, department string, classification int, o
 
 // simulateReBACEnforce simulates Relationship-Based Access Control scenarios
 // Based on classic ReBAC model: decisions based on relationships between entities
-func simulateReBACEnforce(logger *PrometheusLogger) {
+func simulateReBACEnforce(logger *PrometheusLogger, rng *rand.Rand) {
 	// ReBAC subjects with relationships
 	subjects := []struct {
 		name         string
@@ -292,12 +300,12 @@ func simulateReBACEnforce(logger *PrometheusLogger) {
 	actions := []string{"read", "write", "share", "delete"}
 
 	// Select random parameters
-	subject := subjects[rand.Intn(len(subjects))]
-	resource := resources[rand.Intn(len(resources))]
-	action := actions[rand.Intn(len(actions))]
+	subject := subjects[rng.Intn(len(subjects))]
+	resource := resources[rng.Intn(len(resources))]
+	action := actions[rng.Intn(len(actions))]
 
 	// Determine if access should be allowed based on ReBAC rules
-	allowed := determineReBACAccess(subject.name, subject.organization, resource.owner, resource.organization, resource.isPublic, action)
+	allowed := determineReBACAccess(subject.name, subject.organization, resource.owner, resource.organization, resource.isPublic, action, rng)
 
 	// Create and log the enforce event
 	entry := &LogEntry{
@@ -310,13 +318,13 @@ func simulateReBACEnforce(logger *PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Simulate processing time (2-12ms for relationship resolution)
-	time.Sleep(time.Duration(2+rand.Intn(11)) * time.Millisecond)
+	time.Sleep(time.Duration(2+rng.Intn(11)) * time.Millisecond)
 	entry.Allowed = allowed
 	logger.OnAfterEvent(entry)
 }
 
 // determineReBACAccess simulates ReBAC policy evaluation based on relationships
-func determineReBACAccess(subject, subjectOrg, resourceOwner, resourceOrg string, isPublic bool, action string) bool {
+func determineReBACAccess(subject, subjectOrg, resourceOwner, resourceOrg string, isPublic bool, action string, rng *rand.Rand) bool {
 	// Rule 1: Owner can do anything
 	if subject == resourceOwner {
 		return true
@@ -334,19 +342,19 @@ func determineReBACAccess(subject, subjectOrg, resourceOwner, resourceOrg string
 
 	// Rule 4: Same organization members can share
 	if subjectOrg == resourceOrg && action == "share" {
-		return rand.Float32() < 0.7 // 70% success rate
+		return rng.Float32() < 0.7 // 70% success rate
 	}
 
 	// Rule 5: Cross-organization access is mostly denied
 	if subjectOrg != resourceOrg {
-		return rand.Float32() < 0.1 // 10% success rate
+		return rng.Float32() < 0.1 // 10% success rate
 	}
 
 	return false
 }
 
 // simulatePolicyOperation simulates periodic policy operations
-func simulatePolicyOperation(logger *PrometheusLogger) {
+func simulatePolicyOperation(logger *PrometheusLogger, rng *rand.Rand) {
 	operations := []EventType{
 		EventAddPolicy,
 		EventRemovePolicy,
@@ -354,8 +362,8 @@ func simulatePolicyOperation(logger *PrometheusLogger) {
 		EventSavePolicy,
 	}
 
-	operation := operations[rand.Intn(len(operations))]
-	ruleCount := 1 + rand.Intn(10) // 1-10 rules affected
+	operation := operations[rng.Intn(len(operations))]
+	ruleCount := 1 + rng.Intn(10) // 1-10 rules affected
 
 	entry := &LogEntry{
 		EventType: operation,
@@ -364,10 +372,10 @@ func simulatePolicyOperation(logger *PrometheusLogger) {
 
 	logger.OnBeforeEvent(entry)
 	// Simulate processing time (5-30ms for policy operations)
-	time.Sleep(time.Duration(5+rand.Intn(26)) * time.Millisecond)
+	time.Sleep(time.Duration(5+rng.Intn(26)) * time.Millisecond)
 
 	// Simulate occasional errors (5% failure rate)
-	if rand.Float32() < 0.05 {
+	if rng.Float32() < 0.05 {
 		entry.Error = fmt.Errorf("simulated policy operation error")
 	}
 
