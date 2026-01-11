@@ -429,6 +429,10 @@ func TestMetricGetters(t *testing.T) {
 	if logger.GetPolicyRulesCount() == nil {
 		t.Error("GetPolicyRulesCount returned nil")
 	}
+
+	if logger.GetPolicyStateCount() == nil {
+		t.Error("GetPolicyStateCount returned nil")
+	}
 }
 
 func TestLogger_InterfaceImplementation(t *testing.T) {
@@ -488,5 +492,188 @@ func TestFullWorkflow(t *testing.T) {
 	policyCount := testutil.CollectAndCount(logger.policyOpsTotal)
 	if policyCount != 0 {
 		t.Errorf("Expected 0 policy metrics (filtered), got %d", policyCount)
+	}
+}
+
+func TestNewPrometheusLoggerWithOptions_DefaultLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	logger := NewPrometheusLoggerWithOptions(registry, nil)
+	defer logger.UnregisterFrom(registry)
+
+	if logger == nil {
+		t.Fatal("NewPrometheusLoggerWithOptions returned nil")
+	}
+
+	// Default labels should be "allowed" and "domain"
+	if len(logger.enforceLabels) != 2 {
+		t.Errorf("Expected 2 default enforce labels, got %d", len(logger.enforceLabels))
+	}
+
+	if logger.enforceLabels[0] != "allowed" || logger.enforceLabels[1] != "domain" {
+		t.Error("Default enforce labels should be 'allowed' and 'domain'")
+	}
+}
+
+func TestNewPrometheusLoggerWithOptions_CustomLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	options := &PrometheusLoggerOptions{
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
+	}
+	logger := NewPrometheusLoggerWithOptions(registry, options)
+	defer logger.UnregisterFrom(registry)
+
+	if logger == nil {
+		t.Fatal("NewPrometheusLoggerWithOptions returned nil")
+	}
+
+	// Should have "allowed", "domain", "subject", "object", "action"
+	expectedLabels := 5
+	if len(logger.enforceLabels) != expectedLabels {
+		t.Errorf("Expected %d enforce labels, got %d", expectedLabels, len(logger.enforceLabels))
+	}
+
+	// Verify all expected labels are present
+	labelSet := make(map[string]bool)
+	for _, label := range logger.enforceLabels {
+		labelSet[label] = true
+	}
+
+	requiredLabels := []string{"allowed", "domain", "subject", "object", "action"}
+	for _, label := range requiredLabels {
+		if !labelSet[label] {
+			t.Errorf("Expected label '%s' not found in enforce labels", label)
+		}
+	}
+}
+
+func TestNewPrometheusLoggerWithOptions_InvalidLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	options := &PrometheusLoggerOptions{
+		EnforceLabels: []string{EnforceLabelSubject, "invalid_label", EnforceLabelObject},
+	}
+	logger := NewPrometheusLoggerWithOptions(registry, options)
+	defer logger.UnregisterFrom(registry)
+
+	// Should have "allowed", "domain", "subject", "object" (invalid_label excluded)
+	expectedLabels := 4
+	if len(logger.enforceLabels) != expectedLabels {
+		t.Errorf("Expected %d enforce labels (invalid label should be excluded), got %d", expectedLabels, len(logger.enforceLabels))
+	}
+}
+
+func TestEnforceMetrics_WithCustomLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	options := &PrometheusLoggerOptions{
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
+	}
+	logger := NewPrometheusLoggerWithOptions(registry, options)
+	defer logger.UnregisterFrom(registry)
+
+	entry := &LogEntry{
+		IsActive:  true,
+		EventType: EventEnforce,
+		StartTime: time.Now(),
+		Subject:   "alice",
+		Object:    "data1",
+		Action:    "read",
+		Domain:    "domain1",
+		Allowed:   true,
+	}
+
+	logger.OnAfterEvent(entry)
+
+	// Verify metrics were recorded
+	count := testutil.CollectAndCount(logger.enforceTotal)
+	if count != 1 {
+		t.Errorf("Expected 1 metric sample, got %d", count)
+	}
+
+	count = testutil.CollectAndCount(logger.enforceDuration)
+	if count != 1 {
+		t.Errorf("Expected 1 metric sample for duration, got %d", count)
+	}
+}
+
+func TestUpdatePolicyState(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	logger := NewPrometheusLoggerWithRegistry(registry)
+	defer logger.UnregisterFrom(registry)
+
+	// Update policy state for different types
+	logger.UpdatePolicyState("p", 10)
+	logger.UpdatePolicyState("g", 5)
+	logger.UpdatePolicyState("g1", 3)
+	logger.UpdatePolicyState("g2", 2)
+	logger.UpdatePolicyState("g3", 1)
+
+	// Verify metrics were set
+	count := testutil.CollectAndCount(logger.policyStateCount)
+	if count != 5 {
+		t.Errorf("Expected 5 metric samples, got %d", count)
+	}
+
+	// Update the same policy type again
+	logger.UpdatePolicyState("p", 15)
+
+	// Should still have 5 metric samples (same label, different value)
+	count = testutil.CollectAndCount(logger.policyStateCount)
+	if count != 5 {
+		t.Errorf("Expected 5 metric samples after update, got %d", count)
+	}
+}
+
+func TestPolicyStateCount_MultipleTypes(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	logger := NewPrometheusLoggerWithRegistry(registry)
+	defer logger.UnregisterFrom(registry)
+
+	policyTypes := []struct {
+		ptype string
+		count int
+	}{
+		{"p", 100},
+		{"p2", 50},
+		{"g", 25},
+		{"g1", 10},
+		{"g2", 5},
+		{"g3", 2},
+	}
+
+	for _, pt := range policyTypes {
+		logger.UpdatePolicyState(pt.ptype, pt.count)
+	}
+
+	count := testutil.CollectAndCount(logger.policyStateCount)
+	if count != len(policyTypes) {
+		t.Errorf("Expected %d metric samples, got %d", len(policyTypes), count)
+	}
+}
+
+func TestEnforceMetrics_EmptyOptionalFields(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	options := &PrometheusLoggerOptions{
+		EnforceLabels: []string{EnforceLabelSubject, EnforceLabelObject, EnforceLabelAction},
+	}
+	logger := NewPrometheusLoggerWithOptions(registry, options)
+	defer logger.UnregisterFrom(registry)
+
+	// Test with empty subject, object, action fields
+	entry := &LogEntry{
+		IsActive:  true,
+		EventType: EventEnforce,
+		StartTime: time.Now(),
+		Subject:   "",
+		Object:    "",
+		Action:    "",
+		Domain:    "domain1",
+		Allowed:   true,
+	}
+
+	logger.OnAfterEvent(entry)
+
+	// Should not panic and should record metrics with empty strings
+	count := testutil.CollectAndCount(logger.enforceTotal)
+	if count != 1 {
+		t.Errorf("Expected 1 metric sample, got %d", count)
 	}
 }
